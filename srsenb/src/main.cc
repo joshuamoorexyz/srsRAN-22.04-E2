@@ -287,6 +287,38 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     ("scheduler.nr_pdsch_mcs", bpo::value<int>(&args->nr_stack.mac.sched_cfg.fixed_dl_mcs)->default_value(28), "Fixed NR DL MCS (-1 for dynamic).")
     ("scheduler.nr_pusch_mcs", bpo::value<int>(&args->nr_stack.mac.sched_cfg.fixed_ul_mcs)->default_value(28), "Fixed NR UL MCS (-1 for dynamic).")
     ("expert.nr_pusch_max_its", bpo::value<uint32_t>(&args->phy.nr_pusch_max_its)->default_value(10),     "Maximum number of LDPC iterations for NR.")
+
+    // VNF params
+    ("vnf.type", bpo::value<string>(&args->phy.vnf_args.type)->default_value("gnb"), "VNF instance type [gnb,ue].")
+    ("vnf.addr", bpo::value<string>(&args->phy.vnf_args.bind_addr)->default_value("localhost"), "Address to bind VNF interface.")
+    ("vnf.port", bpo::value<uint16_t>(&args->phy.vnf_args.bind_port)->default_value(3333), "Bind port.")
+    ("log.vnf_level",     bpo::value<string>(&args->phy.vnf_args.log_level),   "VNF log level.")
+    ("log.vnf_hex_limit", bpo::value<int>(&args->phy.vnf_args.log_hex_limit),  "VNF log hex dump limit.")
+
+#ifdef ENABLE_SLICER
+    // RAN slicer section
+    ("slicer.enable", bpo::value<bool>(&args->stack.mac.slicer.enable)->default_value(false), "Enable per-subframe RAN slicer.")
+    ("slicer.test_agent_interface", bpo::value<bool>(&args->stack.mac.slicer.test_agent_interface)->default_value(false), "Test interface from agent. Leaves a slice configuration in place for other testing.")
+    ("slicer.slice_db_filename", bpo::value<string>(&args->stack.mac.slicer.slice_db_filename)->default_value(""), "Path for slice configuration file.")
+    ("slicer.workshare", bpo::value<bool>(&args->stack.mac.slicer.workshare)->default_value(true), "Allow slices to share leftover RBGs with other slices.")
+    ("slicer.sliced_unsliced_ratio", bpo::value<uint32_t>(&args->stack.mac.slicer.sliced_unsliced_ratio)->default_value(20), "A single unsliced subframe (where the scheduler prioritizes new RNTIs) will accompany every set of sliced_unsliced_ratio subframes. 0 to disable unsliced subframes.")
+#endif
+
+#ifdef ENABLE_RIC_AGENT
+    // O-RAN RIC/E2AP section
+    ("ric.agent.disable", bpo::value<bool>(&args->ric_agent.disabled)->default_value(false), "Disable the RIC agent.")
+    ("ric.agent.remote_ipv4_addr", bpo::value<string>(&args->ric_agent.remote_ipv4_addr)->default_value("127.0.0.1"), "IPv4 address of the RIC.")
+    ("ric.agent.remote_port", bpo::value<uint16_t>(&args->ric_agent.remote_port)->default_value(E2AP_PORT), "Remote port on which to connect to the RIC.")
+    ("ric.agent.local_ipv4_addr", bpo::value<string>(&args->ric_agent.local_ipv4_addr)->default_value(""), "Local IPv4 address on which to bind the E2 agent.")
+    ("ric.agent.local_port", bpo::value<uint16_t>(&args->ric_agent.local_port)->default_value(0), "Local port on which to bind the E2 agent.")
+    ("ric.agent.no_reconnect", bpo::value<bool>(&args->ric_agent.no_reconnect)->default_value(false), "Don't reconnect on connection loss or error.")
+    ("ric.agent.functions_disabled", bpo::value<string>(&args->ric_agent.functions_disabled)->default_value(""), "A comma-separated list of E2SM functions to disable in the RIC agent; by default, most are enabled.  To enable all, set this to the empty string.")
+    ("ric.agent.log_level", bpo::value<string>(&args->ric_agent.log_level),  "RIC agent log level")
+    ("ric.agent.log_hex_limit",bpo::value<int>(&args->ric_agent.log_hex_limit), "RIC agent log hex dump limit") // needs checking
+#endif
+    ;
+
+
   ;
 
   // Positional options - config file location
@@ -434,6 +466,12 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     if (!vm.count("log.stack_level")) {
       args->stack.log.stack_level = args->log.all_level;
     }
+#ifdef ENABLE_RIC_AGENT
+    if (!vm.count("ric.agent.log_level")) {
+      args->ric_agent.log_level = args->log.all_level; //needs checking
+    }
+#endif
+
   }
 
   // Apply all_hex_limit to any unset layers
@@ -462,6 +500,12 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     if (!vm.count("log.stack_hex_limit")) {
       args->stack.log.stack_hex_limit = args->log.all_hex_limit;
     }
+#ifdef ENABLE_RIC_AGENT
+    if (!vm.count("ric.agent.log_hex_limit")) {
+      args->ric_agent.log_hex_limit = args->log.all_hex_limit; // needs checking
+    }
+#endif
+
   }
 
   // Check remaining eNB config files

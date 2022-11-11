@@ -86,6 +86,19 @@ int enb::init(const all_args_t& args_)
     x2.reset(new x2_adapter(tmp_eutra_stack.get(), tmp_nr_stack.get()));
   }
 
+#ifdef ENABLE_RIC_AGENT
+#ifdef ENABLE_SLICER
+    ric_agent.reset(new ric::agent(log_sink,this,this));
+#else
+    ric_agent.reset(new ric::agent(log_sink,this)); // Changed from logger to log_sink
+#endif
+    if (!ric_agent) {
+      srsran::console("Error creating RIC agent instance.\n");
+      return SRSRAN_ERROR;
+    }
+#endif
+
+
   // Radio and PHY are RAT agnostic
   std::unique_ptr<srsran::radio> tmp_radio = std::unique_ptr<srsran::radio>(new srsran::radio);
   if (tmp_radio == nullptr) {
@@ -128,6 +141,14 @@ int enb::init(const all_args_t& args_)
     }
   }
 
+#ifdef ENABLE_RIC_AGENT
+    if (ric_agent->init(args, phy_cfg, rrc_cfg)) {
+      srsran::console("Error initializing RIC agent.\n");
+      ret = SRSRAN_ERROR;
+    }
+#endif
+
+
   if (tmp_eutra_stack) {
     eutra_stack = std::move(tmp_eutra_stack);
   }
@@ -136,6 +157,10 @@ int enb::init(const all_args_t& args_)
   }
   phy   = std::move(tmp_phy);
   radio = std::move(tmp_radio);
+#ifdef ENABLE_RIC_AGENT
+    ric_agent = std::move(ric_agent);
+#endif
+
 
   started = true; // set to true in any case to allow stopping the eNB if an error happened
 
@@ -149,6 +174,12 @@ int enb::init(const all_args_t& args_)
   if (ret == SRSRAN_SUCCESS) {
     srsran::console("\n==== eNodeB started ===\n");
     srsran::console("Type <t> to view trace\n");
+#if defined(ENABLE_RIC_AGENT) && defined(ENABLE_SLICER)
+    if (args.stack.mac.slicer.enable && args.stack.mac.slicer.test_agent_interface) {
+      ric_agent->test_slicer_interface();
+    }
+#endif
+
   } else {
     // if any of the layers failed to start, make sure the rest is stopped in a controlled manner
     stop();
@@ -161,6 +192,12 @@ void enb::stop()
 {
   if (started) {
     // tear down in reverse order
+#ifdef ENABLE_RIC_AGENT
+    if (ric_agent) {
+      ric_agent->stop();
+    }
+#endif
+
     if (phy) {
       phy->stop();
     }
@@ -228,10 +265,34 @@ void enb::cmd_cell_gain(uint32_t cell_id, float gain)
   phy->cmd_cell_gain(cell_id, gain);
 }
 
-void enb::cmd_cell_measure()
+#ifdef ENABLE_SLICER
+// eNodeB slicer interface
+bool enb::slice_config(std::vector<slicer::slice_config_t> slice_configs)
 {
-  phy->cmd_cell_measure();
+  return stack->slice_config(slice_configs);
 }
+
+bool enb::slice_delete(std::vector<std::string> slice_names)
+{
+  return stack->slice_delete(slice_names);
+}
+
+std::vector<slicer::slice_status_t> enb::slice_status(std::vector<std::string> slice_names)
+{
+  return stack->slice_status(slice_names);
+}
+
+bool enb::slice_ue_bind(std::string slice_name, std::vector<uint64_t> imsi_list)
+{
+  return stack->slice_ue_bind(slice_name, imsi_list);
+}
+
+bool enb::slice_ue_unbind(std::string slice_name, std::vector<uint64_t> imsi_list)
+{
+  return stack->slice_ue_unbind(slice_name, imsi_list);
+}
+#endif
+
 
 std::string enb::get_build_mode()
 {
